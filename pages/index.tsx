@@ -1,7 +1,16 @@
+import Footer from "@/components/Footer";
 import Header from "@/components/Header";
+import MainContent from "@/components/MainContent/MainContent";
+import { formatDate } from "@/helpers/articles";
+import { article, articleApiResponse, tag } from "@/types/api";
 import Head from "next/head";
 
-export default function Home() {
+interface HomeProps {
+  articles: article[];
+  sortedTags: tag[];
+}
+
+export default function Home({ articles, sortedTags }: HomeProps) {
   return (
     <>
       <Head>
@@ -11,7 +20,43 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <Header />
-      <main></main>
+      <MainContent articles={articles} sortedTags={sortedTags} />
+      <Footer />
     </>
   );
 }
+
+Home.getInitialProps = async () => {
+  const res = await fetch(
+    "https://jrt2bb3b2nlkw5ozvfcld62wbe0pnifh.lambda-url.us-east-1.on.aws/"
+  );
+  const articlesResponse: articleApiResponse = await res.json();
+
+  const tags: { [key: string]: { count: number; slug: string } } = {};
+
+  // Loop through the array and at the same time collect all tags
+  const articles = articlesResponse.articles
+    .filter((article) => {
+      article.taxonomy.tags.forEach((tag) => {
+        const currentCount = tags[tag.text]?.count || 0;
+        currentCount === 0
+          ? (tags[tag.text] = { count: 1, slug: tag.slug })
+          : (tags[tag.text].count = currentCount + 1);
+      });
+
+      // Filter only subtype 7
+      return article.subtype === "7";
+    })
+    // Change date format
+    .map((article) => {
+      return { ...article, display_date: formatDate(article.display_date) };
+    });
+
+  // Sort by count value and slice first ten tags
+  const sortedTags = Object.entries(tags)
+    .map(([text, data]) => ({ text, ...data }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  return { articles, sortedTags };
+};
